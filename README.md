@@ -5,7 +5,7 @@ Network Simulation Programs for understanding the operations of various protocol
   
 Authors and Copyright(c) held by:
 * **Arnav Mukhopadhyay**  
-* **Sujoy Mondal, RCCIT, Kolkata**  
+* **Sujoy Mondal, RCC Institute of Information Technology (RCCIIT), Kolkata**  
   
 #netsim #python #networksimulator #simulator #network #internet  
 

@@ -1,5 +1,3 @@
-# CRC polynomial, checking
-# https://en.wikipedia.org/wiki/Cyclic_redundancy_check
 
 import crcfunc
 import random

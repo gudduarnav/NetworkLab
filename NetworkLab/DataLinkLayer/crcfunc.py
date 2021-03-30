@@ -1,5 +1,4 @@
 # CRC Helper function
-# https://en.wikipedia.org/wiki/Cyclic_redundancy_check
 
 def xor1bit(a, b):
     if a == b:

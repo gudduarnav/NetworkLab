@@ -29,6 +29,7 @@ def machineTX(q1 : SimpleQueue, q2 : SimpleQueue, n : int, sleeptime : float):
             if status == "ACK":
                 print("machineTX: ACK received")
                 q1.put(counter)
+                print("machineTX: New packet {} sent".format(counter))
                 counter = counter + 1
         else:
             # wait for ACK

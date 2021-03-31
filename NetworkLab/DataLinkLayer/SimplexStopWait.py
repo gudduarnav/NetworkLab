@@ -75,10 +75,10 @@ def main():
     q2 = SimpleQueue()
 
     # number of packet to send
-    n = 10
+    n = 50
 
     # delay time
-    sleeptime = 2
+    sleeptime = 1
 
     # spawn receiver
     p = Process(target=machineRX, args=(q1, q2, n, sleeptime, ))

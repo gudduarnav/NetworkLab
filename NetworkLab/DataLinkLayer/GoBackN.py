@@ -1,4 +1,4 @@
-# Simplex Stop and Wait
+# Go Back N
 try:
     from multiprocessing import SimpleQueue, set_start_method, Process
 except ImportError as __ex:
@@ -22,6 +22,7 @@ class Sender:
         self.npackets = npackets
         self.maxwaitcount = maxwaitcount
         self.packetQ = list()
+        self.ackpacketQ = list()
         self.packetIndex = 0
         seed(datetime.now())
 
@@ -37,31 +38,70 @@ class Sender:
             self.WaitACK()
 
     def SendPacket(self):
+        # check if we are allowed to send
+        if self.packetIndex >= self.npackets:
+            print("Sender have sent all", self.npackets,"packets. NO MORE PACKETS TO SEND")
+            return
+
         # send packet indicated
         one_packet = [self.packetIndex, 0]
         self.packetQ.append(one_packet)
         self.q_sender.put(one_packet[0])
         print("Sender sent one packet #", one_packet[0])
 
+        # point to next packet to send
+        self.packetIndex += 1
+
     def WaitACK(self):
-        # wait for ACK
-        while self.q_receiver.empty():
-            self.rest()
+        # check for ACK
+        if self.q_receiver.empty():
+            print("Sender did not receive any ACK")
+            self.increaseWaitTime()
+            self.checkWaitTime()
+            return
 
-            # Increase wait count
-            self.packetQ[0][1] = self.packetQ[0][1] + 1
-            print("Sender Waiting for ACK on Packet", self.packetQ[0][0], "waittime=", self.packetQ[0][1])
-
-            # if waitcount excedded threshold...packet is dead. resend
-            if self.packetQ[0][1] > self.maxwaitcount:
-                self.ResendPacket()
-                return
-
+        # read the ACK
         ack_packet = self.q_receiver.get()
-        self.packetQ.pop(0)
-        # point to next packet
-        self.packetIndex = self.packetIndex + 1
         print("Sender received ACK", ack_packet)
+        self.ackpacketQ.append(ack_packet)
+        self.ackpacketQ.sort()
+
+        indexToPop = -1
+        for index in range(len(self.packetQ)):
+            if self.packetQ[index][0] == ack_packet:
+                indexToPop = index
+            else:
+                self.packetQ[index][1] += 1
+                print("Sender updated waittime of packets", self.packetQ[index])
+
+        if indexToPop>=0:
+            self.packetQ.pop(indexToPop)
+            self.checkWaitTime()
+
+    def increaseWaitTime(self):
+        for index in range(len(self.packetQ)):
+            self.packetQ[index][1] += 1
+            print("Sender updated waittime of packets", self.packetQ[index])
+
+    def checkWaitTime(self):
+        packetsLost = list()
+        for index in range(len(self.packetQ)):
+            if self.packetQ[index][1] > self.maxwaitcount:
+                packetsLost.append(self.packetQ[index][0])
+
+        if len(packetsLost)>0:
+            packetsLost.sort()
+            firstPacketLost = packetsLost[0]
+            print("\n\t\t*** Sender GO BACK", firstPacketLost, "***\n")
+            self.packetQ.clear()
+            self.packetIndex = firstPacketLost
+
+            self.ackpacketQ.sort()
+            for index in range(firstPacketLost, self.npackets):
+                if index in self.ackpacketQ:
+                    self.ackpacketQ.remove(index)
+                    print("Sender discarded packet", index)
+
 
 
     def ResendPacket(self):
@@ -78,13 +118,11 @@ class Sender:
 
 
     def isMorePackets(self):
-        if len(self.packetQ) == 0:
-            # there is no item in queue
-            if self.packetIndex >= self.npackets:
-                print("Sender sent all packets successfully. Packets sent", self.packetIndex)
-                return False
+        for index in range(0, self.npackets):
+            if index not in self.ackpacketQ:
+                return True
 
-        return True
+        return False
 
 
 class Receiver:
@@ -132,6 +170,12 @@ class Receiver:
 
         if status:
             print("Receiver received packet", packet)
+            packetQ1 = list()
+            for index in range(len(self.packetQ)):
+                if self.packetQ[index] < packet:
+                    packetQ1.append(self.packetQ[index])
+
+            self.packetQ = packetQ1
             self.packetQ.append(packet)
 
             self.q_receiver.put(packet)
@@ -144,7 +188,7 @@ class Receiver:
     def showCollectedPackets(self):
         packet1 = self.packetQ.copy()
         packet1.sort()
-        print("\n\t\t\t *** RECEIVER COLLECTED PACKETS:", packet1, "***\n")
+        print("\n\t\t*** RECEIVER COLLECTED PACKETS:", packet1,"***\n")
 
 
 

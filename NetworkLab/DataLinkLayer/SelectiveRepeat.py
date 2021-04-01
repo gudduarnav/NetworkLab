@@ -1,4 +1,4 @@
-# Simplex Stop and Wait
+# Selective Repeat
 try:
     from multiprocessing import SimpleQueue, set_start_method, Process
 except ImportError as __ex:
@@ -22,6 +22,7 @@ class Sender:
         self.npackets = npackets
         self.maxwaitcount = maxwaitcount
         self.packetQ = list()
+        self.ack_PacketQ = list()
         self.packetIndex = 0
         seed(datetime.now())
 
@@ -38,53 +39,49 @@ class Sender:
 
     def SendPacket(self):
         # send packet indicated
-        one_packet = [self.packetIndex, 0]
-        self.packetQ.append(one_packet)
-        self.q_sender.put(one_packet[0])
-        print("Sender sent one packet #", one_packet[0])
+        for index in range(len(self.packetQ)):
+            if self.packetQ[index][1] > self.maxwaitcount:
+                print("Sender will SELECTIVE RESEND", self.packetQ[index][0])
 
-    def WaitACK(self):
-        # wait for ACK
-        while self.q_receiver.empty():
-            self.rest()
-
-            # Increase wait count
-            self.packetQ[0][1] = self.packetQ[0][1] + 1
-            print("Sender Waiting for ACK on Packet", self.packetQ[0][0], "waittime=", self.packetQ[0][1])
-
-            # if waitcount excedded threshold...packet is dead. resend
-            if self.packetQ[0][1] > self.maxwaitcount:
-                self.ResendPacket()
+                self.q_sender.put(self.packetQ[index][0])
+                self.packetQ[index][1] = 0
+                print("Sender RESEND packet", self.packetQ[index][0])
                 return
 
-        ack_packet = self.q_receiver.get()
-        self.packetQ.pop(0)
-        # point to next packet
-        self.packetIndex = self.packetIndex + 1
-        print("Sender received ACK", ack_packet)
+        if self.packetIndex < self.npackets:
+            self.q_sender.put(self.packetIndex)
+            self.packetQ.append([self.packetIndex, 0])
+            print("Sender sent NEW PACKET", self.packetIndex)
 
+            self.packetIndex += 1
 
-    def ResendPacket(self):
-        one_packet = self.packetQ[0]
-        self.packetQ.pop(0)
+    def WaitACK(self):
+        if self.q_receiver.empty():
+            self.increaseTime()
+        else:
+            ack_packet = self.q_receiver.get()
 
-        # point to the packet to resend
-        self.packetIndex = one_packet[0]
+            for index in range(len(self.packetQ)):
+                if self.packetQ[index][0] == ack_packet:
+                    self.packetQ.pop(index)
+                    break
 
-        print("Sender need to resend packet", one_packet[0], "PACKET LOST")
+            self.ack_PacketQ.append(ack_packet)
+            self.ack_PacketQ.sort()
+            print("Sender received ACK", ack_packet)
+            self.increaseTime()
 
-
-
+    def increaseTime(self):
+        for index in range(len(self.packetQ)):
+            self.packetQ[index][1] += 1
 
 
     def isMorePackets(self):
-        if len(self.packetQ) == 0:
-            # there is no item in queue
-            if self.packetIndex >= self.npackets:
-                print("Sender sent all packets successfully. Packets sent", self.packetIndex)
-                return False
+        for index in range(self.npackets):
+            if index not in self.ack_PacketQ:
+                return True
 
-        return True
+        return False
 
 
 class Receiver:
